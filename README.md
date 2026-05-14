@@ -16,9 +16,9 @@ discretized on conformal, hexahedral, 2nd-order meshes generated with [Gmsh](htt
 ## Project Layout
 
 ```
-ViewFactors.jl/
+RadiativeViewFactor.jl/
 ├── src/
-│   ├── ViewFactors.jl          # Package entry-point, exports
+│   ├── RadiativeViewFactor.jl          # Package entry-point, exports
 │   ├── MeshIO.jl               # Gmsh mesh loading, physical-group extraction
 │   ├── Geometry.jl             # Element geometry: normals, Jacobians, quadrature maps
 │   ├── Quadrature.jl           # Gauss–Legendre rules on [-1,1]²
@@ -26,9 +26,6 @@ ViewFactors.jl/
 │   ├── RayCast.jl              # Möller–Trumbore ray–triangle intersection + obstruction test
 │   ├── ViewFactorKernel.jl     # Double-area integral kernel, element-pair VF
 │   └── Assembly.jl             # Assemble full F matrix; physical-group aggregation
-├── examples/
-│   ├── parallel_plates.jl      # Two infinite parallel plates (analytical reference)
-│   └── enclosure.jl            # Cubic enclosure (6-surface closure check)
 ├── test/
 │   └── runtests.jl
 └── Project.toml
@@ -37,7 +34,7 @@ ViewFactors.jl/
 ## Quick Start
 
 ```julia
-using ViewFactors
+using RadiativeViewFactors
 
 # Load mesh
 mesh = load_mesh("geometry.msh")
