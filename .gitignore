@@ -1,0 +1,6 @@
+
+# disallow notebook commits
+*.ipynb
+
+# disallow manifest commits
+Manifest.toml
