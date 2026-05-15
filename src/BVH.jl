@@ -201,28 +201,15 @@ end
 # ---------------------------------------------------------------------------
 
 """
-    intersect_ray_bvh(bvh, origin, direction, t_max;
-                      skip_start=0, skip_end=0) -> Bool
+    intersect_ray_bvh(bvh, origin, direction, t_max) -> Bool
 
 Return `true` if any triangle in `bvh` is hit by the ray
 `origin + t * direction` for `t ∈ (0, t_max)`.
-
-Triangles with 1-based indices in [skip_start, skip_end] are excluded —
-pass the group_tri_ranges of both the source and destination groups to
-prevent rays from being blocked by the surfaces they originate from or
-terminate on.  When the two groups are different their ranges are unioned
-into the single contiguous interval [min, max], which may over-exclude a
-small number of triangles from third groups if those groups happen to fall
-between them in the soup — in practice this is harmless since two surfaces
-that can see each other will never have a third surface indexed between them
-unless it is genuinely between them geometrically.
 """
-function intersect_ray_bvh(bvh::BVHTree,
-                             origin::SVector{3,Float64},
+function intersect_ray_bvh(bvh      ::BVHTree,
+                             origin   ::SVector{3,Float64},
                              direction::SVector{3,Float64},
-                             t_max::Float64;
-                             skip_start::Int = 0,
-                             skip_end  ::Int = 0)::Bool
+                             t_max    ::Float64)::Bool
     inv_d = SVector(1.0/direction[1], 1.0/direction[2], 1.0/direction[3])
 
     stack    = zeros(Int, 64)
@@ -238,7 +225,6 @@ function intersect_ray_bvh(bvh::BVHTree,
         if node.left == 0   # leaf
             for k in node.tri_start : node.tri_start + node.tri_count - 1
                 tidx = bvh.tri_idx[k]
-                skip_start <= tidx <= skip_end && continue
                 v0 = SVector{3,Float64}(bvh.tri_soup[1,1,tidx],
                                          bvh.tri_soup[1,2,tidx],
                                          bvh.tri_soup[1,3,tidx])

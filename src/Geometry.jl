@@ -112,7 +112,7 @@ function element_area(coords::Matrix{Float64}, nodes; nquad::Int=4)::Float64
         pts1d = [-1/√3, 1/√3]; wts1d = [1.0, 1.0]
     elseif nquad >= 4
         # Use Golub–Welsch via the parent Quadrature module
-        rule = Main.ViewFactors.Quadrature.gauss_legendre_2d(nquad)
+        rule = Main.RadiativeViewFactor.Quadrature.gauss_legendre_2d(nquad)
         A = 0.0
         for k in 1:size(rule.points, 2)
             ξ, η = rule.points[1,k], rule.points[2,k]
