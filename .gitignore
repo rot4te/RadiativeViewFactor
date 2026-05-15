@@ -4,3 +4,6 @@
 
 # disallow manifest commits
 Manifest.toml
+
+# disallow workspace pushes
+*.code-workspace
