@@ -1,4 +1,4 @@
-# src/rvf.jl
+# src/RadiativeViewFactor
 module RadiativeViewFactor
 
 using LinearAlgebra

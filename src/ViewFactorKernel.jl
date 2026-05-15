@@ -124,26 +124,13 @@ end
 
 Compute ∬_Aᵢ ∬_Aⱼ K dAⱼ dAᵢ and the area Aᵢ of elem_i.
 """
-function element_pair_view_factor(coords          ::Matrix{Float64},
-                                   elem_i          ::SurfaceElement,
-                                   elem_j          ::SurfaceElement,
-                                   nquad           ::Int,
-                                   bvh             ::Union{BVHTree, Nothing},
-                                   group_tri_ranges::Dict{Int,Tuple{Int,Int}};
-                                   check_obstruction::Bool=true)::Tuple{Float64,Float64}
+function element_pair_view_factor(coords::Matrix{Float64},
+                                   elem_i::SurfaceElement,
+                                   elem_j::SurfaceElement,
+                                   nquad ::Int,
+                                   bvh   ::Union{BVHTree, Nothing})::Tuple{Float64,Float64}
 
-    do_vis = check_obstruction && bvh !== nothing
-
-    # Triangle indices to skip: union of source and destination group ranges.
-    # This prevents rays from being blocked by the surface they start from or
-    # end on, including all other elements on those same physical surfaces.
-    skip_start, skip_end = if do_vis
-        ra = group_tri_ranges[elem_i.group]
-        rb = group_tri_ranges[elem_j.group]
-        min(ra[1], rb[1]), max(ra[2], rb[2])
-    else
-        0, 0
-    end
+    do_vis = bvh !== nothing
 
     pts_i, wts_i, nds_i = _quad_points(coords, elem_i, nquad)
     pts_j, wts_j, nds_j = _quad_points(coords, elem_j, nquad)
@@ -168,7 +155,7 @@ function element_pair_view_factor(coords          ::Matrix{Float64},
 
             K = vf_kernel(xi, ni, xj, nj)
             K == 0.0 && continue
-            do_vis && !is_visible(bvh, xi, xj, skip_start, skip_end) && continue
+            do_vis && !is_visible(bvh, xi, xj) && continue
 
             inner += wj * K * dAj
         end

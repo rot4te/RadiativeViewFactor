@@ -24,22 +24,19 @@ end
 
 Fields
 ------
-- `coords`            : (3 × N_nodes) coordinate matrix
-- `surface_elems`     : vector of SurfaceElement
-- `group_tags`        : Dict tag → name
-- `group_elems`       : Dict tag → element indices (into surface_elems)
-- `tri_soup`          : (3, 3, N_tris) obstruction geometry
-- `group_tri_ranges`  : Dict tag → (tri_start, tri_end) inclusive 1-based range
-                        of triangle indices in tri_soup belonging to that group.
-                        Used to exclude an entire group from BVH queries.
+- `coords`         : (3 × N_nodes) coordinate matrix
+- `surface_elems`  : vector of SurfaceElement (all radiating surfaces)
+- `group_tags`     : Dict tag → name
+- `group_elems`    : Dict tag → element indices (into surface_elems)
+- `group_tri_soup` : Dict tag → (3, 3, N_tris) triangle soup for that group's
+                     elements only. Used to build per-group BVHs for obstruction.
 """
 struct MeshData
-    coords           :: Matrix{Float64}
-    surface_elems    :: Vector{SurfaceElement}
-    group_tags       :: Dict{Int, String}
-    group_elems      :: Dict{Int, Vector{Int}}
-    tri_soup         :: Array{Float64, 3}
-    group_tri_ranges :: Dict{Int, Tuple{Int,Int}}   # tag => (first_tri, last_tri)
+    coords         :: Matrix{Float64}
+    surface_elems  :: Vector{SurfaceElement}
+    group_tags     :: Dict{Int, String}
+    group_elems    :: Dict{Int, Vector{Int}}
+    group_tri_soup :: Dict{Int, Array{Float64,3}}
 end
 
 function load_mesh(filename::AbstractString;
@@ -54,8 +51,7 @@ function load_mesh(filename::AbstractString;
         group_tags      = _read_physical_groups(surface_dim)
         surface_elems, group_elems =
             _read_surface_elements(surface_dim, group_tags, tag2idx, verbose)
-        tri_soup, group_tri_ranges =
-            _build_tri_soup(coords, surface_elems, group_elems)
+        group_tri_soup  = _build_group_tri_soups(coords, surface_elems, group_elems)
         if verbose
             counts = Dict{Symbol,Int}(:quad=>0, :tri=>0)
             for e in surface_elems; counts[e.family] += 1; end
@@ -64,7 +60,7 @@ function load_mesh(filename::AbstractString;
                     "in $(length(group_tags)) physical group(s).")
         end
         return MeshData(coords, surface_elems, group_tags, group_elems,
-                        tri_soup, group_tri_ranges)
+                        group_tri_soup)
     finally
         gmsh.finalize()
     end
@@ -149,51 +145,36 @@ Common causes:
     return surface_elems, group_elems
 end
 
-"""
-Build triangle soup and record the contiguous triangle index range for each
-physical group.  Elements within a group are guaranteed to be contiguous in
-the soup because group_elems preserves insertion order.
-"""
-function _build_tri_soup(coords     ::Matrix{Float64},
-                          elems      ::Vector{SurfaceElement},
-                          group_elems::Dict{Int,Vector{Int}})
-    n_tris = sum(e.family == :quad ? 2 : 1 for e in elems)
-    soup   = Array{Float64,3}(undef, 3, 3, n_tris)
-
-    # elem_tri_start[i] = first triangle index (1-based) for element i
-    elem_tri_start = Vector{Int}(undef, length(elems))
-    t = 0
-    for (i, el) in enumerate(elems)
-        elem_tri_start[i] = t + 1
-        c = el.nodes
-        v1 = @view coords[:, c[1]]
-        v2 = @view coords[:, c[2]]
-        v3 = @view coords[:, c[3]]
-        t += 1
-        soup[:, 1, t] .= v1
-        soup[:, 2, t] .= v2
-        soup[:, 3, t] .= v3
-        if el.family == :quad
-            v4 = @view coords[:, c[4]]
+"""Build a separate triangle soup for each physical group."""
+function _build_group_tri_soups(coords     ::Matrix{Float64},
+                                 elems      ::Vector{SurfaceElement},
+                                 group_elems::Dict{Int,Vector{Int}})
+    soups = Dict{Int, Array{Float64,3}}()
+    for (gtag, idxs) in group_elems
+        n_tris = sum(elems[i].family == :quad ? 2 : 1 for i in idxs)
+        soup   = Array{Float64,3}(undef, 3, 3, n_tris)
+        t = 0
+        for i in idxs
+            el = elems[i]
+            c  = el.nodes
+            v1 = @view coords[:, c[1]]
+            v2 = @view coords[:, c[2]]
+            v3 = @view coords[:, c[3]]
             t += 1
             soup[:, 1, t] .= v1
-            soup[:, 2, t] .= v3
-            soup[:, 3, t] .= v4
+            soup[:, 2, t] .= v2
+            soup[:, 3, t] .= v3
+            if el.family == :quad
+                v4 = @view coords[:, c[4]]
+                t += 1
+                soup[:, 1, t] .= v1
+                soup[:, 2, t] .= v3
+                soup[:, 3, t] .= v4
+            end
         end
+        soups[gtag] = soup
     end
-
-    # For each group, find the min and max triangle indices across all its elements
-    group_tri_ranges = Dict{Int, Tuple{Int,Int}}()
-    for (gtag, elem_idxs) in group_elems
-        isempty(elem_idxs) && continue
-        first_tri = elem_tri_start[elem_idxs[1]]
-        last_elem = elem_idxs[end]
-        last_tri  = elem_tri_start[last_elem] +
-                    (elems[last_elem].family == :quad ? 1 : 0)
-        group_tri_ranges[gtag] = (first_tri, last_tri)
-    end
-
-    return soup, group_tri_ranges
+    return soups
 end
 
 end # module MeshIO
