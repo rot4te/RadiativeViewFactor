@@ -15,8 +15,6 @@ include("ViewFactorKernel.jl")
 include("GPUKernels.jl")
 include("Assembly.jl")
 include("GPUAssembly.jl")
-include("RadiativeViewFactorCUDAExt.jl")
-include("RadiativeViewFactorMetalExt.jl")
 
 using .MeshIO:    load_mesh, MeshData
 using .Assembly:  compute_view_factors, aggregate_by_group,
