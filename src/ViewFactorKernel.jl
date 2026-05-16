@@ -155,7 +155,7 @@ function element_pair_view_factor(coords::Matrix{Float64},
 
             K = vf_kernel(xi, ni, xj, nj)
             K == 0.0 && continue
-            do_vis && !is_visible(bvh, xi, xj) && continue
+            do_vis && !is_visible(bvh::BVHTree, xi, xj) && continue
 
             inner += wj * K * dAj
         end

@@ -38,7 +38,8 @@ using KernelAbstractions
 using StaticArrays
 using LinearAlgebra: cross, dot
 
-import ..GPUBVH: gpu_intersect_bvh, FlatBVH
+import ..GPUBVH:     gpu_intersect_bvh, FlatBVH
+import ..Quadrature: gauss_legendre_2d
 
 export build_gpu_arrays, launch_vf_kernel!
 
@@ -287,8 +288,6 @@ Flatten MeshData into plain typed arrays ready for GPU transfer.
 `FloatT` is `Float32` (Metal) or `Float64` (CUDA/CPU).
 """
 function build_gpu_arrays(mesh, nquad::Int, ArrayT, FloatT)
-    import_mods = Base.loaded_modules   # just for readability below
-
     elems      = mesh.surface_elems
     coords_cpu = FloatT.(mesh.coords)
     N          = length(elems)
@@ -322,8 +321,7 @@ function build_gpu_arrays(mesh, nquad::Int, ArrayT, FloatT)
         reduce(hcat, tri_node_lists)  : zeros(Int32, 6, 0)
 
     # Quadrature rules
-    using_mod = Main.RadiativeViewFactor   # access parent module's Quadrature
-    gl_rule   = using_mod.Quadrature.gauss_legendre_2d(nquad)
+    gl_rule   = gauss_legendre_2d(nquad)
     quad_pts_cpu = FloatT.(gl_rule.points)
     quad_wts_cpu = FloatT.(gl_rule.weights)
 
