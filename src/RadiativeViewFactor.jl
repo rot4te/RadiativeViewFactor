@@ -1,9 +1,14 @@
+<<<<<<< HEAD
 # src/RadiativeViewFactor
+=======
+# src/RadiativeViewFactor.jl
+>>>>>>> update
 module RadiativeViewFactor
 
 using LinearAlgebra
 using StaticArrays
 using SparseArrays
+using KernelAbstractions
 
 include("MeshIO.jl")
 include("Quadrature.jl")
@@ -11,7 +16,9 @@ include("Geometry.jl")
 include("BVH.jl")
 include("RayCast.jl")
 include("ViewFactorKernel.jl")
+include("GPUKernels.jl")
 include("Assembly.jl")
+include("GPUAssembly.jl")
 
 using .MeshIO:    load_mesh, MeshData
 using .Assembly:  compute_view_factors, aggregate_by_group,
