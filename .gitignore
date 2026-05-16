@@ -7,3 +7,6 @@ Manifest.toml
 
 # disallow workspace pushes
 *.code-workspace
+
+# disallow .claude extension trafficking
+.claude

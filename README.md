@@ -1,5 +1,7 @@
 # RadiativeViewFactors.jl
 
+[![CI](https://github.com/rot4te/RadiativeViewFactor/actions/workflows/CI.yml/badge.svg)](https://github.com/rot4te/RadiativeViewFactor/actions/workflows/CI.yml)
+
 A modular Julia package for computing **radiative view factors** between arbitrary surfaces
 discretized on conformal, hexahedral, 2nd-order meshes generated with [Gmsh](https://gmsh.info/).
 
