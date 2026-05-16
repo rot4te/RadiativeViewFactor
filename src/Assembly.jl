@@ -54,6 +54,8 @@ function compute_view_factors(mesh               ::MeshData;
                                self_vf           ::Bool         = false,
                                verbose           ::Bool         = true)::ViewFactorResult
 
+    backend isa Type && (backend = backend())
+
     if !(backend isa CPU)
         isempty(obstruction_groups) ||
             @warn "obstruction_groups is ignored on GPU backends (CPU-only feature)."

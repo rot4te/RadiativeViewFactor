@@ -28,6 +28,7 @@ module GPUKernels
 
 using KernelAbstractions
 using StaticArrays
+using LinearAlgebra: cross, dot
 
 export build_gpu_arrays, launch_vf_kernel!
 
@@ -76,14 +77,16 @@ end
     return N, dNdξ, dNdη
 end
 
-# Evaluate physical point and (unnormalised cross-product, |cross|) for Quad8
-@inline function _quad8_point_and_jac(coords, nodes, ξ::T, η::T) where T
+# Evaluate physical point and (normal, dA) for Quad8.
+# Takes the full nodes_quad matrix and the 1-based column index to avoid
+# creating a heap-allocated SubArray (view) inside a GPU kernel.
+@inline function _quad8_point_and_jac(coords, nodes, col::Int, ξ::T, η::T) where T
     N, dNdξ, dNdη = _quad8_shape(ξ, η)
     x    = @SVector zeros(T, 3)
     dxdξ = @SVector zeros(T, 3)
     dxdη = @SVector zeros(T, 3)
     for a in 1:8
-        na = nodes[a]
+        na = nodes[a, col]
         xa = SVector{3,T}(coords[1,na], coords[2,na], coords[3,na])
         x    = x    +  N[a]*xa
         dxdξ = dxdξ + dNdξ[a]*xa
@@ -94,14 +97,14 @@ end
     return x, c/dA, dA
 end
 
-# Evaluate physical point and (normal, dA) for Tri6
-@inline function _tri6_point_and_jac(coords, nodes, ξ::T, η::T) where T
+# Evaluate physical point and (normal, dA) for Tri6.
+@inline function _tri6_point_and_jac(coords, nodes, col::Int, ξ::T, η::T) where T
     N, dNdξ, dNdη = _tri6_shape(ξ, η)
     x    = @SVector zeros(T, 3)
     dxdξ = @SVector zeros(T, 3)
     dxdη = @SVector zeros(T, 3)
     for a in 1:6
-        na = nodes[a]
+        na = nodes[a, col]
         xa = SVector{3,T}(coords[1,na], coords[2,na], coords[3,na])
         x    = x    +  N[a]*xa
         dxdξ = dxdξ + dNdξ[a]*xa
@@ -157,13 +160,11 @@ end
         if fi == 0
             ξ, η   = quad_pts[1,p], quad_pts[2,p]
             wi     = quad_wts[p]
-            nodes_i = view(nodes_quad, :, ni_idx)
-            xi, nni, dAi = _quad8_point_and_jac(coords, nodes_i, ξ, η)
+            xi, nni, dAi = _quad8_point_and_jac(coords, nodes_quad, Int(ni_idx), ξ, η)
         else
             ξ, η   = tri_pts[1,p], tri_pts[2,p]
             wi     = tri_wts[p]
-            nodes_i = view(nodes_tri, :, ni_idx)
-            xi, nni, dAi = _tri6_point_and_jac(coords, nodes_i, ξ, η)
+            xi, nni, dAi = _tri6_point_and_jac(coords, nodes_tri, Int(ni_idx), ξ, η)
         end
 
         Ai += wi * dAi
@@ -177,13 +178,11 @@ end
             if fj == 0
                 ξj, ηj = quad_pts[1,q], quad_pts[2,q]
                 wj     = quad_wts[q]
-                nodes_j = view(nodes_quad, :, nj_idx)
-                xj, nnj, dAj = _quad8_point_and_jac(coords, nodes_j, ξj, ηj)
+                xj, nnj, dAj = _quad8_point_and_jac(coords, nodes_quad, Int(nj_idx), ξj, ηj)
             else
                 ξj, ηj = tri_pts[1,q], tri_pts[2,q]
                 wj     = tri_wts[q]
-                nodes_j = view(nodes_tri, :, nj_idx)
-                xj, nnj, dAj = _tri6_point_and_jac(coords, nodes_j, ξj, ηj)
+                xj, nnj, dAj = _tri6_point_and_jac(coords, nodes_tri, Int(nj_idx), ξj, ηj)
             end
 
             K = _vf_kernel(xi, nni, xj, nnj)
@@ -222,13 +221,11 @@ end
         if fi == 0
             ξ, η  = quad_pts[1,p], quad_pts[2,p]
             wi    = quad_wts[p]
-            nodes_i = view(nodes_quad, :, ni_idx)
-            _, _, dAi = _quad8_point_and_jac(coords, nodes_i, ξ, η)
+            _, _, dAi = _quad8_point_and_jac(coords, nodes_quad, Int(ni_idx), ξ, η)
         else
             ξ, η  = tri_pts[1,p], tri_pts[2,p]
             wi    = tri_wts[p]
-            nodes_i = view(nodes_tri, :, ni_idx)
-            _, _, dAi = _tri6_point_and_jac(coords, nodes_i, ξ, η)
+            _, _, dAi = _tri6_point_and_jac(coords, nodes_tri, Int(ni_idx), ξ, η)
         end
         Ai += wi * dAi
     end
@@ -341,10 +338,8 @@ Launch the view factor kernel on `backend` and return device arrays
 function launch_vf_kernel!(ga, backend; groupsize::Int=16)
     N      = ga.N
     FloatT = ga.FloatT
-    ArrayT = typeof(ga.coords)
-
-    raw_out  = ArrayT(zeros(FloatT, N, N))
-    area_out = ArrayT(zeros(FloatT, N))
+    raw_out  = fill!(similar(ga.coords, FloatT, N, N), zero(FloatT))
+    area_out = fill!(similar(ga.coords, FloatT, N), zero(FloatT))
 
     # Area kernel: 1-D, one thread per element
     area_kern! = _area_kernel!(backend, groupsize)

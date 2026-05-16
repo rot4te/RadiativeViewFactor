@@ -6,7 +6,7 @@ module RadiativeViewFactorMetalExt
 
 using Metal
 using KernelAbstractions
-import .RadiativeViewFactor.Assembly: _gpu_array_type, _gpu_float_type
+import RadiativeViewFactor.Assembly: _gpu_array_type, _gpu_float_type
 
 _gpu_array_type(::MetalBackend) = MtlArray
 _gpu_float_type(::MetalBackend) = Float32
