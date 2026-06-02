@@ -16,12 +16,9 @@ module RadiativeViewFactorMakieExt
 using Makie
 using LinearAlgebra
 
-import RadiativeViewFactor: MeshData, plot_mesh_normals
-import RadiativeViewFactor.Geometry: quad8_physical_point,
-                                      quad8_normal_and_area_element,
-                                      line3_physical_point,
-                                      line3_normal_and_length_element
-import RadiativeViewFactor.MeshIO: SurfaceElement
+import RadiativeViewFactor: MeshData, SurfaceElement, plot_mesh_normals,
+                             quad8_physical_point, quad8_normal_and_area_element,
+                             line3_physical_point, line3_normal_and_length_element
 
 # ---------------------------------------------------------------------------
 # Public API
