@@ -14,7 +14,7 @@ or curves discretized on 2nd-order meshes generated with [Gmsh](https://gmsh.inf
 - **Three integration methods** selectable per call:
   - *Gauss–Legendre quadrature* (default): pre-tabulated for n ≤ 5, Golub–Welsch algorithm for n > 5; Dunavant rules for triangular elements; 1-D Gauss–Legendre for Line3 curve elements
   - *Monte Carlo*: stratified area sampling with O(1/N) variance convergence per element pair; per-thread independent RNG streams on CPU; xorshift64 per-thread PRNG on GPU
-  - *Duffy transformation* (`use_duffy=true`): Sauter–Schwab singularity regularisation for Quad8 element pairs sharing a vertex (8-region decomposition) or edge (5-region decomposition); falls back to standard quadrature for non-adjacent pairs and non-Quad8 families
+  - *Duffy transformation* (`use_duffy=true`): Sauter–Schwab singularity regularization for Quad8 element pairs sharing a vertex (8-region decomposition) or edge (5-region decomposition); falls back to standard quadrature for non-adjacent pairs and non-Quad8 families
 - **Obstruction detection** via ray–triangle (3D) or ray–segment (2D) intersection on an axis-aligned BVH; works on both CPU and GPU backends and with all three integration methods
 - `obstruction_groups` interface: pass physical group tags of potential occluders; source and destination groups are automatically excluded per pair
 - Automatic **normal orientation correction** at load time: for curve meshes (`surface_dim=1`), element normals are oriented to point toward the adjacent transfinite surface interior, determined from mesh element connectivity (works with `.msh` v2.2 and v4)
@@ -80,7 +80,7 @@ check_closure(result)       # prints row-sum range
 
 ```julia
 # Automatically detects shared vertices and edges between Quad8 elements
-# and applies the Sauter–Schwab regularisation only where needed.
+# and applies the Sauter–Schwab regularization only where needed.
 result = compute_view_factors(mesh; nquad=6, use_duffy=true)
 ```
 
@@ -143,7 +143,7 @@ result = compute_view_factors(mesh; nquad=4, backend=MetalBackend())
 ### Mesh visualisation
 
 ```julia
-using GLMakie   # or CairoMakie, WGLMakie
+using Plots
 using RadiativeViewFactor
 
 mesh = load_mesh("geometry.msh"; surface_dim=1)
@@ -164,11 +164,11 @@ save("normals.png", fig)   # requires CairoMakie
 
 ### 3D view factor (surface meshes)
 
-$$F_{ij} = \frac{1}{A_i} \iint_{A_i} \iint_{A_j} \frac{\cos\theta_i \cos\theta_j}{\pi r^2} \, H_{ij} \, dA_j \, dA_i$$
+$$F_{ij} = \frac{1}{A_i} \iint_{A_i} \iint_{A_j} \frac{\cos\theta_i \cos\theta_j}{\pi r^2} \ H_{ij} \ dA_j \, dA_i$$
 
 ### 2D view factor (curve meshes, per unit depth)
 
-$$F_{ij} = \frac{1}{L_i} \int_{L_i} \int_{L_j} \frac{\cos\theta_i \cos\theta_j}{2r} \, H_{ij} \, dL_j \, dL_i$$
+$$F_{ij} = \frac{1}{L_i} \int_{L_i} \int_{L_j} \frac{\cos\theta_i \cos\theta_j}{2r} \ H_{ij} \ dL_j \ dL_i$$
 
 The factor of 2 rather than π in the denominator follows from integrating the 2D radiation intensity over the hemisphere, which gives π/2 rather than π.
 
@@ -185,7 +185,7 @@ For Quad8 element pairs sharing a vertex or edge, the `1/r²` singularity in the
 
 Pairs with no shared nodes use standard quadrature (`nquad⁴` points). The singularity type is detected automatically from shared global node indices.
 
-Note: the 2D kernel `1/r` for Line3 elements produces a logarithmic divergence (not `1/r²`) at shared endpoints, which is physically real and not regularisable by the Duffy transformation. `use_duffy` has no effect for `surface_dim=1`.
+Note: the 2D kernel `1/r` for Line3 elements produces a logarithmic divergence (not `1/r²`) at shared endpoints, which is physically real and not regularizable by the Duffy transformation. `use_duffy` has no effect for `surface_dim=1`.
 
 ### Monte Carlo integration
 
@@ -254,7 +254,7 @@ The following works informed the numerical methods in this package:
 - Zienkiewicz, O. C., Taylor, R. L., & Zhu, J. Z. (2005). *The Finite Element Method: Its Basis and Fundamentals* (6th ed.). Elsevier. — Quad8 serendipity and Tri6 shape functions, isoparametric mapping, Gauss quadrature.
 
 **Duffy transformation and boundary element singularity treatment:**
-- Sauter, S. A., & Schwab, C. (2011). *Boundary Element Methods*. Springer. — Sauter–Schwab common-vertex and common-edge decompositions (§5.3), the definitive reference for the 4D Duffy regularisation used in `DuffyKernel.jl`.
+- Sauter, S. A., & Schwab, C. (2011). *Boundary Element Methods*. Springer. — Sauter–Schwab common-vertex and common-edge decompositions (§5.3), the definitive reference for the 4D Duffy regularization used in `DuffyKernel.jl`.
 - Duffy, M. G. (1982). Quadrature over a pyramid or cube of integrands with a singularity at a vertex. *SIAM Journal on Numerical Analysis*, 19(6), 1260–1262. — Original Duffy transformation paper.
 
 **Gaussian quadrature:**
@@ -284,4 +284,4 @@ The following works informed the numerical methods in this package:
 | `LinearAlgebra`, `SparseArrays`, `Random`, `Statistics` | Standard library |
 | `CUDA` *(optional weak dep)* | NVIDIA GPU backend |
 | `Metal` *(optional weak dep)* | Apple Silicon GPU backend |
-| `Makie` *(optional weak dep)* | Mesh visualisation via `plot_mesh_normals` |
+| `Plots` *(optional weak dep)* | Mesh visualisation via `plot_mesh_normals` |

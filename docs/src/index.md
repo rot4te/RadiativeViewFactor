@@ -13,7 +13,7 @@ by Gmsh as its geometric description. Three integration strategies are available
   geometries
 - **Monte Carlo** — stratified area sampling; advantageous when many obstructions
   are present or near-singular pairs exist
-- **Duffy transformation** — Sauter–Schwab singularity regularisation for Quad8
+- **Duffy transformation** — Sauter–Schwab singularity regularization for Quad8
   element pairs sharing a vertex or edge; gives accurate results for inclined
   surfaces with common edges
 
