@@ -18,7 +18,7 @@ The following works informed the numerical methods implemented in this package.
 ## Singularity treatment (Duffy transformation)
 
 - Sauter, S. A., & Schwab, C. (2011). *Boundary Element Methods*. Springer.
-  — Sauter–Schwab common-vertex (§5.3.2) and common-edge (§5.3.3) decompositions; the primary reference for the 4D Duffy regularisation implemented in `DuffyKernel.jl`.
+  — Sauter–Schwab common-vertex (§5.3.2) and common-edge (§5.3.3) decompositions; the primary reference for the 4D Duffy regularization implemented in `DuffyKernel.jl`.
 
 - Duffy, M. G. (1982). Quadrature over a pyramid or cube of integrands with a singularity at a vertex. *SIAM Journal on Numerical Analysis*, 19(6), 1260–1262.
   — Original Duffy transformation; the foundational technique underlying the Sauter–Schwab decompositions.

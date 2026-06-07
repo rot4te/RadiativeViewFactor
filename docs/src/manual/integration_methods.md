@@ -43,7 +43,7 @@ Singularity type is detected automatically:
 - Quad8–Quad8 pairs only; Tri6 and Line3 pairs always use standard quadrature
 - Incompatible with `monte_carlo=true`
 - Not applicable for `surface_dim=1` (the 2D `1/r` singularity at shared
-  endpoints is physically divergent and cannot be regularised)
+  endpoints is physically divergent and cannot be regularized)
 
 **Cost:** `8 × nquad⁴` evaluations per vertex pair, `5 × nquad⁴` per edge pair,
 versus `nquad⁴` for standard quadrature. Since only adjacent pairs trigger the
