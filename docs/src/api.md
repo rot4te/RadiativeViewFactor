@@ -3,28 +3,28 @@
 ## Mesh I/O
 
 ```@docs
-load_mesh
-MeshData
-SurfaceElement
+RadiativeViewFactor.load_mesh
+RadiativeViewFactor.MeshData
+RadiativeViewFactor.SurfaceElement
 ```
 
 ## View factor computation
 
 ```@docs
-compute_view_factors
-ViewFactorResult
+RadiativeViewFactor.compute_view_factors
+RadiativeViewFactor.ViewFactorResult
 ```
 
 ## Post-processing
 
 ```@docs
-aggregate_by_group
-check_reciprocity
-check_closure
+RadiativeViewFactor.aggregate_by_group
+RadiativeViewFactor.check_reciprocity
+RadiativeViewFactor.check_closure
 ```
 
 ## Visualisation
 
 ```@docs
-plot_mesh_normals
+RadiativeViewFactor.plot_mesh_normals
 ```
