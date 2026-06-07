@@ -12,3 +12,5 @@ Manifest.toml
 .claude
 
 testmesh
+
+.DS_Store
