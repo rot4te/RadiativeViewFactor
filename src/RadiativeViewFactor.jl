@@ -12,6 +12,7 @@ include("Geometry.jl")
 include("BVH.jl")
 include("RayCast.jl")
 include("ViewFactorKernel.jl")
+include("DuffyKernel.jl")   # Sauter-Schwab Duffy transformation for singular pairs
 include("MCKernel.jl")      # CPU Monte Carlo integrator
 include("Results.jl")       # ViewFactorResult, _aggregate — no upstream deps
 include("GPUBVH.jl")

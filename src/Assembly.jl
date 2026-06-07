@@ -11,6 +11,7 @@ import ..Quadrature:       gauss_legendre_2d
 import ..BVH:              BVHTree, build_bvh
 import ..ViewFactorKernel: element_pair_view_factor
 import ..MCKernel:         element_pair_view_factor_mc
+import ..DuffyKernel:      element_pair_view_factor_duffy, singularity_type
 import ..Results:          ViewFactorResult, _aggregate, aggregate_by_group,
                            check_reciprocity, check_closure
 
@@ -48,6 +49,11 @@ Arguments
                           variance at O(1/√n_samples) cost.
 - `rng`                 : random number generator for the CPU MC path
                           (default: `Random.default_rng()`). Ignored on GPU.
+- `use_duffy`           : if `true`, use the Sauter–Schwab Duffy transformation
+                          for element pairs that share a vertex or edge, giving
+                          accurate results near corner singularities. CPU only;
+                          applies to Quad8 pairs only (other families use standard
+                          quadrature). Incompatible with `monte_carlo=true`.
 - `verbose`             : print progress and row-sum diagnostics
 """
 function compute_view_factors(mesh               ::MeshData;
@@ -58,9 +64,15 @@ function compute_view_factors(mesh               ::MeshData;
                                monte_carlo       ::Bool         = false,
                                n_samples         ::Int          = 10000,
                                rng               ::AbstractRNG  = Random.default_rng(),
+                               use_duffy         ::Bool         = false,
                                verbose           ::Bool         = true)::ViewFactorResult
 
     backend isa Type && (backend = backend())
+
+    use_duffy && !(backend isa CPU) &&
+        @warn "use_duffy is CPU-only; ignored for GPU backends."
+    use_duffy && monte_carlo &&
+        error("use_duffy and monte_carlo cannot both be true.")
 
     if !(backend isa CPU)
         if mesh.mesh_dim == 1
@@ -75,7 +87,7 @@ function compute_view_factors(mesh               ::MeshData;
     end
 
     return _compute_cpu(mesh, nquad, obstruction_groups, self_vf, verbose,
-                         mesh.mesh_dim, monte_carlo, n_samples, rng)
+                         mesh.mesh_dim, monte_carlo, n_samples, rng, use_duffy)
 end
 
 # ---------------------------------------------------------------------------
@@ -90,7 +102,8 @@ function _compute_cpu(mesh              ::MeshData,
                        mesh_dim         ::Int         = 2,
                        monte_carlo      ::Bool        = false,
                        n_samples        ::Int         = 10000,
-                       rng              ::AbstractRNG = Random.default_rng())::ViewFactorResult
+                       rng              ::AbstractRNG = Random.default_rng(),
+                       use_duffy        ::Bool        = false)::ViewFactorResult
 
     elems  = mesh.surface_elems
     coords = mesh.coords
@@ -127,6 +140,8 @@ function _compute_cpu(mesh              ::MeshData,
     if verbose
         if monte_carlo
             println("CPU compute_view_factors: $N elements, n_samples=$n_samples (Monte Carlo)")
+        elseif use_duffy
+            println("CPU compute_view_factors: $N elements, nquad=$nquad (Duffy for singular pairs)")
         else
             println("CPU compute_view_factors: $N elements, nquad=$nquad")
         end
@@ -174,8 +189,13 @@ function _compute_cpu(mesh              ::MeshData,
             for j in j_start:N
                 gj  = elems[j].group
                 bvh = get_bvh(gi, gj)
-                integ, _ = element_pair_view_factor(coords, elems[i], elems[j],
-                                                     nquad, bvh, mesh_dim)
+                integ, _ = if use_duffy
+                    element_pair_view_factor_duffy(coords, elems[i], elems[j],
+                                                    nquad, bvh, mesh_dim)
+                else
+                    element_pair_view_factor(coords, elems[i], elems[j],
+                                             nquad, bvh, mesh_dim)
+                end
                 raw_integral[i, j] = integ
                 raw_integral[j, i] = integ
             end
