@@ -8,15 +8,16 @@ or curves discretized on 2nd-order meshes generated with [Gmsh](https://gmsh.inf
 ## Features
 
 - Reads Gmsh `.msh` files (v2.2 and v4) via the Gmsh Julia SDK
-- **3D surface meshes** (`surface_dim=2`): Quad8, Quad9 (centre node silently dropped), and Tri6 elements
+- **3D surface meshes** (`surface_dim=2`): Quad8, Quad9 (centre node dropped), and Tri6 elements
 - **2D planar curve meshes** (`surface_dim=1`): Line3 elements; computes view factors per unit depth using the 2D kernel cos θᵢ cos θⱼ / (2r)
 - Groups radiating geometry by **Gmsh physical groups**; view factors reported at both element and group level; rows and columns of `F_group` indexed by `result.group_tags` / `result.group_names`
-- **Two integration methods** selectable per call:
-  - *Gauss–Legendre quadrature*: pre-tabulated for n ≤ 5, Golub–Welsch for n > 5; Dunavant rules for triangular elements; 1-D Gauss–Legendre for Line3 curve elements
-  - *Monte Carlo*: stratified area sampling with O(1/N) variance convergence; per-thread independent RNG streams on CPU; xorshift64 per-thread PRNG on GPU
-- **Obstruction detection** via ray–triangle (3D) or ray–segment (2D) intersection on an axis-aligned BVH; works on both CPU and GPU backends with both integration methods
+- **Three integration methods** selectable per call:
+  - *Gauss–Legendre quadrature* (default): pre-tabulated for n ≤ 5, Golub–Welsch algorithm for n > 5; Dunavant rules for triangular elements; 1-D Gauss–Legendre for Line3 curve elements
+  - *Monte Carlo*: stratified area sampling with O(1/N) variance convergence per element pair; per-thread independent RNG streams on CPU; xorshift64 per-thread PRNG on GPU
+  - *Duffy transformation* (`use_duffy=true`): Sauter–Schwab singularity regularisation for Quad8 element pairs sharing a vertex (8-region decomposition) or edge (5-region decomposition); falls back to standard quadrature for non-adjacent pairs and non-Quad8 families
+- **Obstruction detection** via ray–triangle (3D) or ray–segment (2D) intersection on an axis-aligned BVH; works on both CPU and GPU backends and with all three integration methods
 - `obstruction_groups` interface: pass physical group tags of potential occluders; source and destination groups are automatically excluded per pair
-- Automatic **normal orientation correction** at load time: for curve meshes (`surface_dim=1`), element normals are oriented to point toward the adjacent transfinite surface interior, determined from mesh connectivity
+- Automatic **normal orientation correction** at load time: for curve meshes (`surface_dim=1`), element normals are oriented to point toward the adjacent transfinite surface interior, determined from mesh element connectivity (works with `.msh` v2.2 and v4)
 - Optional **normal reversal**: `reverse_normals=true` flips all normals; `reverse_groups=[...]` flips specific physical groups only
 - **Mesh visualisation** via an optional Makie extension: load any Makie backend and call `plot_mesh_normals(mesh)` to inspect element geometry and normal directions
 - CPU backend: multi-threaded via `Threads.@threads`
@@ -35,6 +36,7 @@ RadiativeViewFactor.jl/
 │   ├── BVH.jl                   # Axis-aligned BVH; triangle and segment soup support
 │   ├── RayCast.jl               # CPU visibility test; dispatches on mesh_dim
 │   ├── ViewFactorKernel.jl      # 3D and 2D deterministic kernels; element-pair integrator
+│   ├── DuffyKernel.jl           # Sauter–Schwab Duffy transformation for singular pairs
 │   ├── MCKernel.jl              # CPU Monte Carlo integrator with stratified sampling
 │   ├── Results.jl               # ViewFactorResult, _aggregate, check functions
 │   ├── GPUBVH.jl                # Stackless flat BVH for GPU: build + inline traversal
@@ -45,7 +47,7 @@ RadiativeViewFactor.jl/
 ├── ext/
 │   ├── RadiativeViewFactorCUDAExt.jl    # Registers CUDABackend → CuArray, Float64
 │   ├── RadiativeViewFactorMetalExt.jl  # Registers MetalBackend → MtlArray, Float32
-│   └── RadiativeViewFactorMakieExt.jl  # plot_mesh_normals (loaded with any Makie backend)
+│   └── RadiativeViewFactorMakieExt.jl  # plot_mesh_normals (any Makie backend)
 ├── test/
 │   └── runtests.jl
 └── Project.toml
@@ -65,11 +67,24 @@ result = compute_view_factors(mesh; nquad=4)
 println(result.group_names)
 println(result.F_group)
 
+# Look up a specific pair by name
+i = findfirst(==("emitter"),  result.group_names)
+j = findfirst(==("receiver"), result.group_names)
+println("F(emitter → receiver) = ", result.F_group[i, j])
+
 check_reciprocity(result)   # prints max relative error of Aᵢ Fᵢⱼ = Aⱼ Fⱼᵢ
 check_closure(result)       # prints row-sum range
 ```
 
-### 3D surface mesh — Monte Carlo
+### With Duffy transformation (near corner/edge singularities)
+
+```julia
+# Automatically detects shared vertices and edges between Quad8 elements
+# and applies the Sauter–Schwab regularisation only where needed.
+result = compute_view_factors(mesh; nquad=6, use_duffy=true)
+```
+
+### Monte Carlo
 
 ```julia
 result = compute_view_factors(mesh; monte_carlo=true, n_samples=50000)
@@ -88,8 +103,8 @@ mesh   = load_mesh("planar.msh"; surface_dim=1)
 result = compute_view_factors(mesh; nquad=6)
 # F_group values are view factors per unit depth
 
-# Normal orientation is corrected automatically.
-# If normals are still wrong for some groups, flip them:
+# Normal orientation is corrected automatically toward the adjacent
+# transfinite surface interior. Override if needed:
 mesh = load_mesh("planar.msh"; surface_dim=1, reverse_normals=true)
 mesh = load_mesh("planar.msh"; surface_dim=1, reverse_groups=[2, 5])
 ```
@@ -101,8 +116,10 @@ mesh = load_mesh("planar.msh"; surface_dim=1, reverse_groups=[2, 5])
 # Source and destination groups are excluded automatically per pair.
 result = compute_view_factors(mesh; nquad=4, obstruction_groups=[3, 4])
 
-# Also works with Monte Carlo:
+# Also works with Monte Carlo and Duffy:
 result = compute_view_factors(mesh; monte_carlo=true, n_samples=50000,
+                               obstruction_groups=[3, 4])
+result = compute_view_factors(mesh; nquad=6, use_duffy=true,
                                obstruction_groups=[3, 4])
 ```
 
@@ -110,17 +127,9 @@ result = compute_view_factors(mesh; monte_carlo=true, n_samples=50000,
 
 ```julia
 using CUDA
-
-# Deterministic
 result = compute_view_factors(mesh; nquad=4, backend=CUDABackend())
-
-# Monte Carlo
 result = compute_view_factors(mesh; monte_carlo=true, n_samples=50000,
-                               backend=CUDABackend())
-
-# With obstruction
-result = compute_view_factors(mesh; nquad=4, backend=CUDABackend(),
-                               obstruction_groups=[3, 4])
+                               backend=CUDABackend(), obstruction_groups=[3])
 ```
 
 ### GPU — Apple Metal
@@ -129,8 +138,6 @@ result = compute_view_factors(mesh; nquad=4, backend=CUDABackend(),
 using Metal
 # Metal uses Float32 internally; results are promoted to Float64
 result = compute_view_factors(mesh; nquad=4, backend=MetalBackend())
-result = compute_view_factors(mesh; monte_carlo=true, n_samples=50000,
-                               backend=MetalBackend())
 ```
 
 ### Mesh visualisation
@@ -142,140 +149,59 @@ using RadiativeViewFactor
 mesh = load_mesh("geometry.msh"; surface_dim=1)
 fig  = plot_mesh_normals(mesh)
 
-# Options
 fig = plot_mesh_normals(mesh;
-        normal_scale  = 0.05,          # arrow length in mesh units (auto if omitted)
-        show_nodes    = true,          # scatter-plot element nodes
-        show_indices  = true,          # annotate elements with index numbers
-        group_colors  = Dict(1=>:red, 2=>:blue))  # override colours per group tag
+        normal_scale  = 0.05,
+        show_nodes    = true,
+        show_indices  = true,
+        group_colors  = Dict(1=>:red, 2=>:blue))
 
-save("normals.png", fig)   # requires CairoMakie for PNG/SVG/PDF output
+save("normals.png", fig)   # requires CairoMakie
 ```
 
-## API Reference
-
-### `load_mesh(filename; ...) → MeshData`
-
-Load a Gmsh `.msh` file and extract all 2nd-order elements in named physical groups.
-
-| Keyword | Default | Description |
-|---|---|---|
-| `surface_dim` | `2` | `2` for surface meshes; `1` for planar curve meshes |
-| `reverse_normals` | `false` | Flip all element normals after loading |
-| `reverse_groups` | `Int[]` | Flip normals for specific physical group tags only |
-| `verbose` | `true` | Print element-type summary and orientation corrections |
-
-For `surface_dim=1`, element normals are automatically oriented to point toward
-the adjacent transfinite surface interior, determined from mesh element
-connectivity (works with both `.msh` v2.2 and v4). `reverse_normals` and
-`reverse_groups` are applied after this auto-correction.
-
-Returns a `MeshData` with fields `coords`, `surface_elems`, `group_tags`,
-`group_elems`, `group_tri_soup`, and `mesh_dim`.
-
-### `compute_view_factors(mesh; ...) → ViewFactorResult`
-
-Assemble the full view factor matrix at element and group level.
-
-| Keyword | Default | Description |
-|---|---|---|
-| `nquad` | `4` | Gauss points per direction (ignored when `monte_carlo=true`) |
-| `obstruction_groups` | `Int[]` | Physical group tags of potential occluders |
-| `backend` | `CPU()` | `CPU()`, `CUDABackend()`, or `MetalBackend()` |
-| `self_vf` | `false` | Include self view factors (concave elements; CPU only) |
-| `monte_carlo` | `false` | Use Monte Carlo integration instead of quadrature |
-| `n_samples` | `10000` | MC sample pairs per element pair (ignored when `monte_carlo=false`) |
-| `rng` | `Random.default_rng()` | RNG for CPU MC path; ignored on GPU |
-| `verbose` | `true` | Print progress and row-sum diagnostics |
-
-Notes:
-- GPU backends do not support `surface_dim=1`; use `CPU()` for 2D problems
-- Monte Carlo convergence is O(1/√n_samples) for plain sampling, O(1/n_samples) with stratification (default); increase `n_samples` for tighter accuracy
-- For reproducible MC results pass an explicit seeded RNG, e.g. `rng=MersenneTwister(42)`
-
-### `ViewFactorResult` fields
-
-| Field | Type | Description |
-|---|---|---|
-| `F_elem` | `Matrix{Float64}` | Element-level view factor matrix (N_elem × N_elem) |
-| `A_elem` | `Vector{Float64}` | Element areas or arc lengths |
-| `F_group` | `Matrix{Float64}` | Group-level view factor matrix (G × G) |
-| `A_group` | `Vector{Float64}` | Group areas or arc lengths |
-| `group_tags` | `Vector{Int}` | Physical group tags, sorted; row/column labels for `F_group` |
-| `group_names` | `Vector{String}` | Physical group names in the same order as `group_tags` |
-
-`F_group[i,j]` is the view factor **from** `group_names[i]` **to** `group_names[j]`.
-
-```julia
-# Look up a specific pair by name
-i = findfirst(==("emitter"),  result.group_names)
-j = findfirst(==("receiver"), result.group_names)
-println("F(emitter → receiver) = ", result.F_group[i, j])
-```
-
-### `aggregate_by_group(result, mesh) → (F_group, A_group, tags, names)`
-
-Re-aggregate element-level results to group level (useful after modifying `result.F_elem`).
-
-### `check_reciprocity(result; tol=1e-4) → Bool`
-
-Verify Aᵢ Fᵢⱼ ≈ Aⱼ Fⱼᵢ for all element pairs. Prints the maximum relative error.
-
-### `check_closure(result; tol=1e-3) → Bool`
-
-Verify no row of `F_elem` sums to more than 1 + `tol`. Prints the row-sum range.
-Row sums less than 1 are expected for open geometries.
-
-### `plot_mesh_normals(mesh; ...) → Figure`
-
-Visualise mesh elements with normal arrows. Requires any Makie backend to be
-loaded first (`GLMakie`, `CairoMakie`, or `WGLMakie`).
-
-| Keyword | Default | Description |
-|---|---|---|
-| `normal_scale` | auto | Arrow length in mesh units; auto-estimated from bounding box if omitted |
-| `group_colors` | auto | `Dict{Int,Any}` mapping group tag → Makie colour |
-| `show_nodes` | `false` | Scatter-plot all element nodes |
-| `show_indices` | `false` | Annotate each element with its index number |
-| `backend_3d` | auto | Force `Axis3`; defaults to `true` for surface meshes |
+> **Full API documentation** is available at the [package documentation site](https://rot4te.github.io/RadiativeViewFactor.jl).
 
 ## Theory
 
-### 3D (surface meshes)
+### 3D view factor (surface meshes)
 
-```
-F_ij = (1/Aᵢ) ∬_Aᵢ ∬_Aⱼ  [cos θᵢ cos θⱼ / (π r²)]  H_ij  dAⱼ dAᵢ
-```
+$$F_{ij} = \frac{1}{A_i} \iint_{A_i} \iint_{A_j} \frac{\cos\theta_i \cos\theta_j}{\pi r^2} \, H_{ij} \, dA_j \, dA_i$$
 
-### 2D (curve meshes, per unit depth)
+### 2D view factor (curve meshes, per unit depth)
 
-```
-F_ij = (1/Lᵢ) ∫_Lᵢ ∫_Lⱼ  [cos θᵢ cos θⱼ / (2 r)]  H_ij  dLⱼ dLᵢ
-```
+$$F_{ij} = \frac{1}{L_i} \int_{L_i} \int_{L_j} \frac{\cos\theta_i \cos\theta_j}{2r} \, H_{ij} \, dL_j \, dL_i$$
 
-### Integration methods
+The factor of 2 rather than π in the denominator follows from integrating the 2D radiation intensity over the hemisphere, which gives π/2 rather than π.
 
-**Gauss–Legendre quadrature** evaluates the double integral at fixed reference-space
-points. Convergence is spectral for smooth integrands but degrades near singularities
-(e.g. nearly-touching or shared-edge element pairs).
+### Gauss–Legendre quadrature
 
-**Monte Carlo** draws stratified random sample pairs from each element pair.
-The N samples are divided into ⌊√N⌋ × ⌊√N⌋ strata on the reference domain;
-one point is drawn uniformly within each stratum. This gives O(1/N) variance
-convergence rather than O(1/√N) for plain MC. MC is advantageous for geometries
-with many obstructions or near-singular element pairs.
+The double integral is evaluated at fixed tensor-product Gauss points on each element pair. Pre-tabulated rules for n ≤ 5 use classical nodes and weights (Abramowitz & Stegun §25.4); the Golub–Welsch algorithm is used for n > 5. Dunavant rules are used for triangular elements. Convergence is spectral for smooth integrands but degrades near corner singularities.
 
-### Obstruction
+### Duffy transformation
 
-**CPU**: a BVH is built once per unique set of active obstruction groups and
-reused across all pairs sharing that set. Triangle soup for 3D (Möller–Trumbore
-intersection); segment soup for 2D (Cramer's rule line–line intersection).
+For Quad8 element pairs sharing a vertex or edge, the `1/r²` singularity in the kernel is integrable but not efficiently resolved by standard quadrature. The Duffy transformation introduces a radial coordinate ρ measuring distance to the singular point; the Jacobian ρ³ of the 4D transformation cancels the singularity, leaving a bounded integrand on which Gauss quadrature converges rapidly. The implementation uses the Sauter–Schwab decomposition:
 
-**GPU**: the BVH is flattened to plain device arrays with miss-link pointers for
-stackless traversal. Each thread independently traverses the BVH with no
-thread-local stack, eliminating register pressure from MVector storage.
-Per-triangle group tags allow each thread to skip triangles belonging to the
-emitter or receiver group without host-side pre-filtering.
+- **Common vertex**: 8-region decomposition, each integrated with `nquad⁴` points (total `8 × nquad⁴`)
+- **Common edge**: 5-region decomposition, each integrated with `nquad⁴` points (total `5 × nquad⁴`)
+
+Pairs with no shared nodes use standard quadrature (`nquad⁴` points). The singularity type is detected automatically from shared global node indices.
+
+Note: the 2D kernel `1/r` for Line3 elements produces a logarithmic divergence (not `1/r²`) at shared endpoints, which is physically real and not regularisable by the Duffy transformation. `use_duffy` has no effect for `surface_dim=1`.
+
+### Monte Carlo integration
+
+The MC estimator for each element pair draws N stratified sample pairs (xᵢ, xⱼ):
+
+$$\iint K \, dA_j \, dA_i \approx \frac{A_i \cdot A_j}{N} \sum_{k=1}^{N} K(x_i^{(k)}, n_i^{(k)}, x_j^{(k)}, n_j^{(k)}) \cdot H_{ij}^{(k)}$$
+
+Samples are drawn on a ⌊√N⌋ × ⌊√N⌋ stratified grid within the reference element, giving O(1/N) variance convergence for smooth integrands rather than O(1/√N) for plain Monte Carlo. Near corner singularities the variance of the MC estimator diverges (infinite variance for the `1/r²` kernel), making `use_duffy` preferable for those geometries.
+
+On GPU, each thread uses an independent xorshift64 pseudo-random number stream seeded by mixing the global seed with the thread index via the splitmix64 hash.
+
+### Obstruction detection
+
+**CPU**: a BVH is built once per unique set of active obstruction groups and reused across all pairs. Triangle soup for 3D (Möller–Trumbore ray–triangle intersection); line-segment soup for 2D (Cramer's rule line–line intersection).
+
+**GPU**: the BVH is flattened to plain device arrays with miss-link pointers for stackless traversal (no per-thread MVector). Per-triangle group tags allow each GPU thread to skip triangles belonging to the emitter or receiver group without host-side pre-filtering.
 
 ## Mesh Requirements
 
@@ -289,7 +215,7 @@ emitter or receiver group without host-side pre-filtering.
 
 - `Line3` elements (Gmsh type 8); `Mesh.ElementOrder = 2` before meshing
 - Radiating curves in **Physical Curve** groups
-- Normal orientation is corrected automatically from mesh adjacency; use `reverse_normals` or `reverse_groups` if the auto-correction produces wrong results for specific groups
+- Normal orientation corrected automatically; use `reverse_normals` or `reverse_groups` if needed
 
 ```gmsh
 Mesh.ElementOrder = 2;
@@ -300,26 +226,53 @@ Physical Curve("obstruction") = {3};
 
 ## Performance Notes
 
-### Quadrature vs Monte Carlo
+### Integration method selection
 
-Quadrature is generally faster and more accurate for smooth geometries with low
-obstruction. Monte Carlo is preferable when:
-- Many obstructions are present (MC pays the BVH cost only for non-zero kernel samples)
-- Near-singular element pairs exist (shared edges, near-touching surfaces)
-- A rough estimate is acceptable at low `n_samples` cost
+| Method | Best for | Avoid when |
+|---|---|---|
+| Quadrature | Smooth geometry, well-separated surfaces | Near corner/edge singularities |
+| Duffy | Shared vertices/edges between Quad8 elements | GPU, Monte Carlo, Tri6/Line3 elements |
+| Monte Carlo | Many obstructions, near-singular pairs, rough estimates | High-accuracy requirements with few obstructions |
 
-### GPU vs CPU
+### GPU vs CPU crossover
 
-GPU backends outperform CPU for N ≳ 300–500 elements (deterministic) or
-N ≳ 200 elements (Monte Carlo, which has higher arithmetic intensity per thread).
-For small meshes, kernel compilation and host↔device transfer dominate.
+GPU backends outperform CPU for N ≳ 300–500 elements (quadrature) or N ≳ 200 (Monte Carlo). For small meshes, kernel compilation and host↔device transfer dominate. Metal uses Float32; results are promoted to Float64 before aggregation.
 
-Metal uses Float32; results are promoted to Float64 before aggregation.
-Near-grazing element pairs or geometries spanning many orders of magnitude may
-show small Float32 rounding errors in individual element-pair values.
+### Duffy transformation cost
 
-The stackless BVH on GPU uses a fixed number of scalar registers regardless of
-tree depth, avoiding register spilling that would occur with a thread-local stack.
+The Duffy path evaluates `8 × nquad⁴` (vertex) or `5 × nquad⁴` (edge) kernel evaluations per singular pair, compared to `nquad⁴` for standard quadrature. Since only adjacent element pairs trigger Duffy, the overhead is proportional to the number of shared edges/vertices in the mesh. A lower `nquad` (e.g. 4) with `use_duffy=true` typically outperforms a higher `nquad` (e.g. 16) with standard quadrature for inclined-plate geometries.
+
+## References
+
+The following works informed the numerical methods in this package:
+
+**View factor theory and quadrature:**
+- Howell, J. R., Mengüç, M. P., & Siegel, R. (2020). *Thermal Radiation Heat Transfer* (7th ed.). CRC Press. — View factor definitions, reciprocity, crossed-string method, and analytical reference cases.
+- Hamilton, D. C., & Morgan, W. R. (1952). *Radiant interchange configuration factors*. NACA Technical Note 2836. — Original tabulation of configuration factor formulae.
+
+**Isoparametric finite elements:**
+- Zienkiewicz, O. C., Taylor, R. L., & Zhu, J. Z. (2005). *The Finite Element Method: Its Basis and Fundamentals* (6th ed.). Elsevier. — Quad8 serendipity and Tri6 shape functions, isoparametric mapping, Gauss quadrature.
+
+**Duffy transformation and boundary element singularity treatment:**
+- Sauter, S. A., & Schwab, C. (2011). *Boundary Element Methods*. Springer. — Sauter–Schwab common-vertex and common-edge decompositions (§5.3), the definitive reference for the 4D Duffy regularisation used in `DuffyKernel.jl`.
+- Duffy, M. G. (1982). Quadrature over a pyramid or cube of integrands with a singularity at a vertex. *SIAM Journal on Numerical Analysis*, 19(6), 1260–1262. — Original Duffy transformation paper.
+
+**Gaussian quadrature:**
+- Golub, G. H., & Welsch, J. H. (1969). Calculation of Gauss quadrature rules. *Mathematics of Computation*, 23(106), 221–230. — Golub–Welsch algorithm used in `Quadrature.jl` for n > 5.
+- Dunavant, D. A. (1985). High degree efficient symmetrical Gaussian quadrature rules for the triangle. *International Journal for Numerical Methods in Engineering*, 21(6), 1129–1148. — Dunavant triangle quadrature rules used for Tri6 elements.
+
+**Ray–triangle intersection:**
+- Möller, T., & Trumbore, B. (1997). Fast, minimum storage ray/triangle intersection. *Journal of Graphics Tools*, 2(1), 21–28. — Algorithm used in `BVH.jl` for obstruction testing.
+
+**BVH construction and traversal:**
+- Wald, I., et al. (2007). *Ray Tracing Gems* — Stackless BVH traversal via miss-link (skip pointer) encoding, used in `GPUBVH.jl`.
+
+**Monte Carlo integration:**
+- Pharr, M., Jakob, W., & Humphreys, G. (2023). *Physically Based Rendering: From Theory to Implementation* (4th ed.). MIT Press. — Stratified sampling, variance reduction, and Monte Carlo estimators for light transport integrals.
+
+**GPU random number generation:**
+- Marsaglia, G. (2003). Xorshift RNGs. *Journal of Statistical Software*, 8(14). — xorshift64 PRNG used in `GPUMCKernels.jl`.
+- Steele, G. L., Lea, D., & Flood, C. H. (2014). Fast splittable pseudorandom number generators. *ACM SIGPLAN Notices*, 49(10). — splitmix64 hash used to derive per-thread seeds.
 
 ## Dependencies
 

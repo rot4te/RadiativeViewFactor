@@ -27,34 +27,39 @@ export compute_view_factors,
                          backend=CPU(), self_vf=false, verbose=true)
                          -> ViewFactorResult
 
-Compute all element-pair view factors.
+Assemble the full view factor matrix at element and physical-group level.
 
-Arguments
----------
-- `mesh`                : `MeshData` from `load_mesh`
-- `nquad`               : Gauss points per direction (nquad² per element pair
-                          for surface elements; nquad points for curve elements)
-- `obstruction_groups`  : physical group tags that may occlude rays. The source
-                          and destination groups are automatically excluded per
-                          pair on both CPU and GPU backends.
-- `backend`             : a KernelAbstractions backend.
-                          `CPU()` (default)  — multi-threaded via Threads.@threads
-                          `CUDABackend()`    — NVIDIA GPU (requires CUDA.jl)
-                          `MetalBackend()`   — Apple GPU (requires Metal.jl)
-- `self_vf`             : include self view factors (curved elements). CPU only.
-- `monte_carlo`         : if `true`, use Monte Carlo integration instead of
+# Arguments
+- `mesh`                : [`MeshData`](@ref) returned by [`load_mesh`](@ref)
+- `nquad`               : Gauss points per direction; `nquad²` points per surface
+                          element pair, `nquad` per curve element pair.
+                          Ignored when `monte_carlo=true`.
+- `obstruction_groups`  : physical group tags that may occlude rays. Source and
+                          destination groups are excluded automatically per pair.
+- `backend`             : `CPU()` (default), `CUDABackend()`, or `MetalBackend()`
+- `self_vf`             : include self view factors (concave elements). CPU only.
+- `monte_carlo`         : use stratified Monte Carlo area-sampling instead of
                           Gauss–Legendre quadrature. Works on all backends.
-- `n_samples`           : number of MC sample pairs per element pair (ignored
-                          when `monte_carlo=false`). Higher values reduce
-                          variance at O(1/√n_samples) cost.
-- `rng`                 : random number generator for the CPU MC path
-                          (default: `Random.default_rng()`). Ignored on GPU.
-- `use_duffy`           : if `true`, use the Sauter–Schwab Duffy transformation
-                          for element pairs that share a vertex or edge, giving
-                          accurate results near corner singularities. CPU only;
-                          applies to Quad8 pairs only (other families use standard
-                          quadrature). Incompatible with `monte_carlo=true`.
+                          Incompatible with `use_duffy=true`.
+- `n_samples`           : MC sample pairs **per element pair**. Ignored when
+                          `monte_carlo=false`. Variance decreases as O(1/N).
+- `rng`                 : RNG for the CPU MC path. Pass a seeded RNG (e.g.
+                          `MersenneTwister(42)`) for reproducible results.
+                          Ignored on GPU.
+- `use_duffy`           : apply the Sauter–Schwab Duffy transformation for Quad8
+                          element pairs sharing a vertex or edge. CPU only;
+                          incompatible with `monte_carlo=true`.
 - `verbose`             : print progress and row-sum diagnostics
+
+# Returns
+A [`ViewFactorResult`](@ref).
+
+# Examples
+```julia
+result = compute_view_factors(mesh; nquad=6)
+result = compute_view_factors(mesh; nquad=6, use_duffy=true)
+result = compute_view_factors(mesh; monte_carlo=true, n_samples=50000)
+```
 """
 function compute_view_factors(mesh               ::MeshData;
                                nquad             ::Int          = 4,

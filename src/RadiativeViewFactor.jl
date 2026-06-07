@@ -44,13 +44,41 @@ export load_mesh,
        line3_physical_point,
        line3_normal_and_length_element
 
-# Declare the function with no methods here; the extension adds the real method.
-# A fallback on Any gives a helpful error when called without Makie loaded,
-# and does not conflict with the extension's MeshData-typed method.
+"""
+    plot_mesh_normals(mesh; normal_scale=nothing, group_colors=nothing,
+                      show_nodes=false, show_indices=false, backend_3d=auto)
+        -> Plots.Plot
+
+Visualise mesh elements with normal arrows coloured by physical group.
+
+Requires Plots.jl to be loaded first:
+```julia
+using Plots
+```
+
+# Arguments
+- `mesh`          : [`MeshData`](@ref) from [`load_mesh`](@ref)
+- `normal_scale`  : arrow length in mesh units. Auto-estimated from the
+                    bounding box diagonal if omitted.
+- `group_colors`  : `Dict{Int,Any}` mapping physical group tag → any colour
+                    accepted by Plots.jl (e.g. `:red`, `"#FF0000"`).
+                    overriding the automatic palette for specified groups.
+- `show_nodes`    : scatter-plot all element nodes.
+- `show_indices`  : annotate each element with its index number.
+
+# Returns
+The `Plots.Plot` object; save it with `savefig(fig, "file.png")`.
+
+# Example
+```julia
+using Plots, RadiativeViewFactor
+mesh = load_mesh("geometry.msh"; surface_dim=1)
+fig  = plot_mesh_normals(mesh; normal_scale=0.05, show_nodes=true)
+```
+"""
 function plot_mesh_normals end
 
 plot_mesh_normals(x; kwargs...) =
-    error("plot_mesh_normals requires a Makie backend. " *
-          "Load one first, e.g. `using GLMakie` or `using CairoMakie`.")
+    error("plot_mesh_normals requires Plots.jl. Load it first with `using Plots`.")
 
 end # module
