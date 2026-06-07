@@ -143,7 +143,7 @@ result = compute_view_factors(mesh; nquad=4, backend=MetalBackend())
 ### Mesh visualisation
 
 ```julia
-using GLMakie   # or CairoMakie, WGLMakie
+using Plots
 using RadiativeViewFactor
 
 mesh = load_mesh("geometry.msh"; surface_dim=1)
