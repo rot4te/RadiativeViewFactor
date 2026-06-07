@@ -6,7 +6,7 @@ makedocs(
     authors  = "Alex Coxe",
     format   = Documenter.HTML(
         prettyurls       = get(ENV, "CI", nothing) == "true",
-        canonical        = "https://rot4te.github.io/RadiativeViewFactor.jl.git",
+        canonical        = "https://rot4te.github.io/RadiativeViewFactor.git",
         edit_link        = "main",
         assets           = String[],
     ),
@@ -36,7 +36,7 @@ makedocs(
 # Local builds (`julia --project=docs docs/make.jl`) skip this safely.
 if get(ENV, "CI", nothing) == "true"
     deploydocs(
-        repo      = "github.com/rot4te/RadiativeViewFactor.jl.git",
+        repo      = "github.com/rot4te/RadiativeViewFactor.git",
         target    = "build",
         branch    = "gh-pages",
         devbranch = "main",
