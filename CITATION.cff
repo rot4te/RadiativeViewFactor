@@ -6,9 +6,9 @@ message: >-
 type: software
 authors:
   - family-names: Coxe
-    given-names: Alex
+    given-names: Alexander
     email: rot4te@gmail.com
-    orcid: ""
+    orcid: "0000-0001-6719-897X"
 repository-code: "https://github.com/rot4te/RadiativeViewFactor.jl"
 url: "https://rot4te.github.io/RadiativeViewFactor.jl"
 abstract: >-
@@ -29,7 +29,7 @@ keywords:
   - GPU
   - heat transfer
 license: MIT
-version: "0.3.0"
+version: "0.5.0"
 date-released: "2025-06-08"
 references:
   - type: book
