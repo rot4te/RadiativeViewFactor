@@ -85,6 +85,11 @@ Named physical groups are used to partition the radiating surfaces. Formats
 that cannot carry physical groups (e.g. STL) have no named groups; in that case
 a single synthetic group named `"default"` covering every entity of
 `surface_dim` is created so the rest of the pipeline behaves uniformly.
+
+XML VTK files (`.vtu` and XML-form `.vtk`) are detected automatically and read
+through ReadVTK.jl (a weak dependency — `using ReadVTK` must be in scope).
+Legacy ASCII/binary `.vtk` files are not handled by ReadVTK and fall through to
+the Gmsh importer. See [`load_vtu`](@ref) for VTK-specific options.
 """
 function load_mesh(filename::AbstractString;
                    surface_dim    ::Int  = 2,
@@ -92,6 +97,11 @@ function load_mesh(filename::AbstractString;
                    verbose        ::Bool = true)::MeshData
     isfile(filename) || error("Mesh file not found: $filename")
     surface_dim ∈ (1, 2) || error("surface_dim must be 1 or 2, got $surface_dim")
+    # XML VTK (.vtu / XML .vtk) is read via the ReadVTK extension; everything
+    # else goes through Gmsh (which also reads legacy .vtk partially).
+    if _is_xml_vtk(filename)
+        return load_vtu(filename; surface_dim, reverse_normals, verbose)
+    end
     gmsh.initialize()
     gmsh.option.setNumber("General.Verbosity", 0)
     gmsh.open(filename)
@@ -133,6 +143,67 @@ function load_mesh(filename::AbstractString;
         gmsh.finalize()
     end
 end; export load_mesh
+
+# ---------------------------------------------------------------------------
+# XML VTK (.vtu) support via the ReadVTK extension
+# ---------------------------------------------------------------------------
+
+"""
+    _is_xml_vtk(filename) -> Bool
+
+Detect XML-form VTK files (`.vtu` and `.vtk` written in XML form) by sniffing
+the header. Legacy VTK files begin with `# vtk DataFile Version` and return
+`false` (they are routed to Gmsh instead).
+"""
+function _is_xml_vtk(filename::AbstractString)::Bool
+    ext = lowercase(splitext(filename)[2])
+    ext in (".vtu", ".pvtu", ".vts", ".vtr", ".vti", ".vtp") && return true
+    ext == ".vtk" || return false
+    # Ambiguous .vtk: peek at the first non-whitespace bytes.
+    head = open(filename, "r") do io
+        String(read(io, min(512, filesize(filename))))
+    end
+    return occursin(r"<\?xml|<VTKFile", head)
+end
+
+# Hook implemented by RadiativeViewFactorReadVTKExt (weak dep on ReadVTK).
+# Defined here with no methods so the extension can add one and so `load_mesh`
+# can detect whether ReadVTK is loaded.
+function _load_vtu_impl end
+
+"""
+    load_vtu(filename; surface_dim=2, reverse_normals=false, verbose=true,
+             group_field=nothing) -> MeshData
+
+Load an XML VTK unstructured grid (`.vtu`) through ReadVTK.jl. Requires
+`using ReadVTK` to be in scope (ReadVTK is a weak dependency).
+
+VTK has no native concept of physical groups. If `group_field` names a
+per-cell integer data array it is used to partition elements into groups;
+otherwise (or if the named array is absent) a single `"default"` group is
+created. Common region arrays (`CellEntityIds`, `gmsh:physical`, `RegionId`,
+`MaterialIds`) are tried automatically when `group_field === nothing`.
+
+Cell types are mapped to element families as:
+Line(3)→line2, QuadraticEdge(21)→line3, Triangle(5)→tri3,
+QuadraticTriangle(22)→tri6, Quad(9)→quad4, QuadraticQuad(23)→quad8.
+"""
+function load_vtu(filename::AbstractString;
+                  surface_dim    ::Int  = 2,
+                  reverse_normals::Bool = false,
+                  verbose        ::Bool = true,
+                  group_field           = nothing)::MeshData
+    if isempty(methods(_load_vtu_impl))
+        error("""
+        Reading XML VTK files (.vtu) requires ReadVTK.jl.
+        Add it and bring it into scope:
+            import Pkg; Pkg.add("ReadVTK")
+            using ReadVTK
+        Then call load_mesh / load_vtu again.
+        """)
+    end
+    return _load_vtu_impl(filename, surface_dim, reverse_normals, verbose, group_field)
+end; export load_vtu
 
 function _read_nodes()
     node_tags, coords_flat, _ = gmsh.model.mesh.getNodes()
