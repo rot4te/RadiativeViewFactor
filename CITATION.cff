@@ -13,8 +13,12 @@ repository-code: "https://github.com/rot4te/RadiativeViewFactor.jl"
 url: "https://rot4te.github.io/RadiativeViewFactor.jl"
 abstract: >-
   A Julia package for computing radiative view factors between arbitrary
-  surfaces or curves discretized on 2nd-order meshes generated with Gmsh.
-  Supports Gauss-Legendre quadrature, Monte Carlo integration with stratified
+  surfaces or curves. Meshes may be structured or unstructured and use
+  first- or second-order elements (triangles, quadrilaterals, and lines,
+  mixable within one mesh); any format readable by Gmsh is supported
+  (including .msh, STL, STEP, Nastran, and MED), along with XML VTK
+  unstructured grids (.vtu) via an optional ReadVTK.jl extension. Supports
+  Gauss-Legendre quadrature, Monte Carlo integration with stratified
   sampling, and the Sauter-Schwab Duffy transformation for near-singular
   element pairs. Provides CPU multi-threading and GPU backends (NVIDIA CUDA
   and Apple Metal) via KernelAbstractions.jl, with BVH-accelerated obstruction
@@ -25,6 +29,9 @@ keywords:
   - view factor
   - configuration factor
   - finite element
+  - unstructured mesh
+  - Gmsh
+  - VTK
   - monte carlo
   - GPU
   - heat transfer
